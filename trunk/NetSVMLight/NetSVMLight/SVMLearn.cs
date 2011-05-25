@@ -127,7 +127,14 @@ namespace NetSVMLight
             if (File.Exists(logFile))
             {
                 Console.WriteLine("\n\nLog file " + logFile + " already exists. Deleting");
-                File.Delete(logFile);
+                try
+                {
+                    File.Delete(logFile);
+                }
+                catch (Exception)
+                {
+                    Console.WriteLine("Failed to delete file");
+                }
             }
 
             Trace.Listeners.Add(new TextWriterTraceListener(logFile));

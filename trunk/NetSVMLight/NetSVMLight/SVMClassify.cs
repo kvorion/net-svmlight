@@ -10,6 +10,27 @@ namespace NetSVMLight
     public class SVMClassify
     {
         private StringBuilder svmClassifyOutput = new StringBuilder();
+        
+        private double precision;
+        public Double Precision
+        {
+            get { return this.precision; }
+            set { this.precision = value; }
+        }
+        
+        private double recall;
+        public Double Recall
+        {
+            get { return this.recall; }
+            set { this.recall = value; }
+        }
+
+        private double accuracy;
+        public Double Accuracy
+        {
+            get { return this.accuracy; }
+            set { this.accuracy = value; }
+        }
 
         /// <summary>
         /// Executes svm_classifier
@@ -34,7 +55,14 @@ namespace NetSVMLight
             if (File.Exists(logFile))
             {
                 Console.WriteLine("\n\nLog file " + logFile + " already exists. Deleting");
-                File.Delete(logFile);
+                try
+                {
+                    File.Delete(logFile);
+                }
+                catch (Exception)
+                {
+                    //ignore..don't do anything if u cant delete the log
+                }
             }
 
             Trace.Listeners.Add(new TextWriterTraceListener(logFile));
@@ -191,6 +219,36 @@ namespace NetSVMLight
             if (!String.IsNullOrEmpty(outLine.Data))
             {
                 this.svmClassifyOutput.Append(outLine.Data + Environment.NewLine);
+                
+                //temporary hack. do this better using delegates
+                if (outLine.Data.ToLower().Contains("on test set"))
+                {
+                    if (outLine.Data.ToLower().Contains("precision"))
+                    {
+                        String[] precisionRecallPercentage = outLine.Data.Split(':')[1].Split('/');
+
+                        if (!Double.TryParse(precisionRecallPercentage[0].Replace("%", String.Empty), out this.precision))
+                        {
+                            this.precision = Double.NaN;
+                        }
+
+                        if (!Double.TryParse(precisionRecallPercentage[1].Replace("%", String.Empty), out this.recall))
+                        {
+                            this.recall = Double.NaN;
+                        }
+                    }
+
+                    else //accuracy
+                    {
+                        String accuracyPercentage = outLine.Data.Substring(outLine.Data.IndexOf(':') + 1, 
+                            outLine.Data.IndexOf('%') - outLine.Data.IndexOf(':') - 1);
+
+                        if (!Double.TryParse(accuracyPercentage, out this.accuracy))
+                        {
+                            this.accuracy = Double.NaN;
+                        }
+                    }
+                }
             }
         }
 
