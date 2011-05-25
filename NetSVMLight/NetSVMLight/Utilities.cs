@@ -240,19 +240,19 @@ namespace NetSVMLight
             }
         }
 
-        public void EntryPoint(String inputFile, int numberOfFolds, String outputFolder, Predicate<String> isNegative)
-        {
-            this.ConstructNFolds(inputFile, numberOfFolds, outputFolder, isNegative);
-            this.PerformCrossValidation(outputFolder);
-        }
-
         /// <summary>
         /// Perform n-fold cross validation
         /// </summary>
         /// <param name="cvFolder">folder that contains the folds</param>
-        private void PerformCrossValidation(String cvFolder)
+        /// <param name="silent">whether or not to be silent on the screen</param>
+        /// <param name="learner">The svm learner with the relevant parameters</param>
+        /// <returns>results</returns>
+        public Results PerformCrossValidation(String cvFolder, bool silent, SVMLearn learner)
         {
             String[] foldDirectories = Directory.GetDirectories(cvFolder);
+            double[] precisions = new double[foldDirectories.Length];
+            double[] recalls = new double[foldDirectories.Length];
+            double[] accuracies = new double[foldDirectories.Length];
 
             for (int counter = 0; counter < foldDirectories.Length; counter++)
             {
@@ -278,10 +278,27 @@ namespace NetSVMLight
 
                 //concatenated file created. now train and test. delete concatenated file
 
-                this.TrainFold(foldDirectories, counter, concatenatedFile);
+                this.TrainFold(foldDirectories, counter, concatenatedFile, silent, learner);
                 File.Delete(concatenatedFile);
-                this.TestFold(foldDirectories, counter);
+                SVMClassify classifier = this.TestFold(foldDirectories, counter);
+
+                precisions[counter] = classifier.Precision;
+                recalls[counter] = classifier.Recall;
+                accuracies[counter] = classifier.Accuracy;
             }
+
+            double accuracy = accuracies.Average(),
+            precision = precisions.Average(),
+            recall = recalls.Average();
+
+            Console.WriteLine("Accuracy: {0}, Precision: {1}, Recall: {2}", accuracy, precision, recall);
+
+            return new Results
+            {
+                accuracy = accuracy,
+                precision = precision,
+                recall = recall
+            };
         }
 
         /// <summary>
@@ -289,13 +306,16 @@ namespace NetSVMLight
         /// </summary>
         /// <param name="foldDirectories">directory in which the folds are placed</param>
         /// <param name="fold">the current fold being tested</param>
-        private void TestFold(string[] foldDirectories, int fold)
+        /// <returns>the classifier containing accuracy, precision and recall</returns>
+        private SVMClassify TestFold(string[] foldDirectories, int fold)
         {
             SVMClassify classifier = new SVMClassify();
             classifier.ExecuteClassifier("svm_classify.exe", Path.Combine(foldDirectories[fold], fold + ".data"),
                 Path.Combine(foldDirectories[fold], fold + ".model"), Path.Combine(foldDirectories[fold], fold + ".output"),
                 Path.Combine(foldDirectories[fold], fold + ".test.log.txt"), Path.Combine(foldDirectories[fold], fold + ".incorrect.txt"),
                 false);
+
+            return classifier;
         }
 
         /// <summary>
@@ -304,15 +324,13 @@ namespace NetSVMLight
         /// <param name="foldDirectories">Directory in which all the folds are placed</param>
         /// <param name="fold">the current fold under computation</param>
         /// <param name="concatenatedFile">training file that was created for this fold</param>
-        private void TrainFold(String[] foldDirectories, int fold, String concatenatedFile)
+        /// <param name="silent">whether or not to be silent on the screen</param>
+        /// <param name="learner">The svm learner with the relevant parameters</param>
+        private void TrainFold(String[] foldDirectories, int fold, String concatenatedFile, bool silent,
+            SVMLearn learner)
         {
-            SVMLearn learner = new SVMLearn();
-            learner.mode = Mode.Classification;
-            learner.kernelType = Kernel.Linear;
-            learner.Cost = 0.55; //high cost model
-            learner.RemoveInconsistentTrainingExamples = true;
             learner.ExecuteLearner("svm_learn.exe", concatenatedFile, Path.Combine(foldDirectories[fold], fold + ".model"),
-                Path.Combine(foldDirectories[fold], fold + ".log.txt"), false);
+                Path.Combine(foldDirectories[fold], fold + ".log.txt"), silent);
         }
 
         /// <summary>
@@ -324,7 +342,7 @@ namespace NetSVMLight
         /// <param name="outputFolder">Will be created to store the cross validation results</param>
         /// <param name="isNegativeExample">Predicate to determine whether a feature vector has a 
         /// negative label</param>
-        private void ConstructNFolds(String exampleFile, int numberOfFolds, String outputFolder,
+        public void ConstructNFolds(String exampleFile, int numberOfFolds, String outputFolder,
             Predicate<String> isNegativeExample)
         {
 
